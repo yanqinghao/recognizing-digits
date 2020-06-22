@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Recognizing Digits</title>
-    <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+    <link rel="stylesheet" href="web/node_modules/jquery-ui-dist/jquery-ui.css">
     <style>
         .ui-slider-handle {
             width: 3em;
@@ -16,7 +16,8 @@
             line-height: 1.6em;
         }
     </style>
-    <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+    <script type="module" src="web/index.js"></script>
+    <!-- <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
     <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
     <script>
         $(function () {
@@ -24,6 +25,10 @@
             sliders.each(function (index, element) {
                 var handle = $(element.getElementsByClassName("ui-slider-handle"));
                 $(element).slider({
+                    min: 0,
+                    max: 255,
+                    step: 1,
+                    value: 0,
                     create: function () {
                         handle.text($(this).slider("value"));
                     },
@@ -32,31 +37,47 @@
                     }
                 });
             });
+            $("#slider-high-s").slider("value", 255);
+            $("#slider-high-v").slider("value", 255);
         });
-    </script>
+    </script> -->
 </head>
 
 <body>
     <div>
         <label for="myfile">Select a file:</label>
-        <input id="uploadfile" type="file" accept="image/gif, image/jpg, image/png" onchange="loadFile(this);" />
+        <input id="uploadfile" type="file" src="index.js" accept="image/gif, image/jpg, image/png"
+            onchange="loadFile(this);" />
         <img id="showimg" src="#" alt="raw image">
     </div>
     <div>
         <label for="myfile">HSV1:</label>
-        
+
         <div>
             <form action="/submit">
-                <div id="slider" class="slider-handle">
-                    <div id="custom-handle" class="ui-slider-handle"></div>
+                <label for="myfile">low_H_name:</label>
+                <div id="slider-low-h" class="slider-handle">
+                    <div id="custom-handle-low-h" class="ui-slider-handle"></div>
                 </div>
-                <label for="myfile">HSV2:</label>
-                <div id="slider2" class="slider-handle">
-                    <div id="custom-handle2" class="ui-slider-handle"></div>
+                <label for="myfile">low_S_name:</label>
+                <div id="slider-low-s" class="slider-handle">
+                    <div id="custom-handle-low-s" class="ui-slider-handle"></div>
                 </div>
-                <label for="myfile">HSV3:</label>
-                <div id="slider3" class="slider-handle">
-                    <div id="custom-handle3" class="ui-slider-handle"></div>
+                <label for="myfile">low_V_name:</label>
+                <div id="slider-low-v" class="slider-handle">
+                    <div id="custom-handle-low-v" class="ui-slider-handle"></div>
+                </div>
+                <label for="myfile">high_H_name:</label>
+                <div id="slider-high-h" class="slider-handle">
+                    <div id="custom-handle-high-h" class="ui-slider-handle"></div>
+                </div>
+                <label for="myfile">high_S_name:</label>
+                <div id="slider-high-s" class="slider-handle">
+                    <div id="custom-handle-high-s" class="ui-slider-handle"></div>
+                </div>
+                <label for="myfile">high_V_name:</label>
+                <div id="slider-high-v" class="slider-handle">
+                    <div id="custom-handle-high-v" class="ui-slider-handle"></div>
                 </div>
                 <input type="submit" value="提交">
             </form>
