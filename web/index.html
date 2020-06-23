@@ -16,43 +16,18 @@
             line-height: 1.6em;
         }
     </style>
-    <script type="module" src="web/index.js"></script>
-    <!-- <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
-    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
-    <script>
-        $(function () {
-            var sliders = $(".slider-handle");
-            sliders.each(function (index, element) {
-                var handle = $(element.getElementsByClassName("ui-slider-handle"));
-                $(element).slider({
-                    min: 0,
-                    max: 255,
-                    step: 1,
-                    value: 0,
-                    create: function () {
-                        handle.text($(this).slider("value"));
-                    },
-                    slide: function (event, ui) {
-                        handle.text(ui.value);
-                    }
-                });
-            });
-            $("#slider-high-s").slider("value", 255);
-            $("#slider-high-v").slider("value", 255);
-        });
-    </script> -->
+    
+    
 </head>
 
 <body>
+    <script type="module" src="web/index.js"></script>
     <div>
         <label for="myfile">Select a file:</label>
-        <input id="uploadfile" type="file" src="index.js" accept="image/gif, image/jpg, image/png"
-            onchange="loadFile(this);" />
+        <input id="uploadfile" type="file" accept="image/gif, image/jpg, image/png"/>
         <img id="showimg" src="#" alt="raw image">
     </div>
     <div>
-        <label for="myfile">HSV1:</label>
-
         <div>
             <form action="/submit">
                 <label for="myfile">low_H_name:</label>
@@ -88,15 +63,11 @@
         <img id="processedimg" src="#" alt="processed image">
     </div>
 
-    <script type="text/javascript">
-        function loadFile(input) {
-            var output = document.getElementById('showimg');
-            output.src = URL.createObjectURL(input.files[0]);
-            output.onload = function () {
-                URL.revokeObjectURL(output.src) // free memory
-            }
-        };
-    </script>
+    <div>
+        <label for="result">Result</label>
+        <p id="result-value"></p>
+    </div>
+
 </body>
 
 </html>
