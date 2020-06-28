@@ -4,8 +4,9 @@ import "./node_modules/jquery-ui-dist/jquery-ui.js"
 $(document).ready(function () {
     var sliders = $(".slider-handle");
     sliders.each(function (index, element) {
-        var handle = $(element.getElementsByClassName("ui-slider-handle"));
-        var initValue = (handle.attr("id") == "custom-handle-high-s" || handle.attr("id") == "custom-handle-high-v") ? 255 : 0;
+        let handle = $(element.getElementsByClassName("ui-slider-handle"));
+        let initMapping = { "custom-handle-low-h": 34, "custom-handle-low-s": 0, "custom-handle-low-v": 24, "custom-handle-high-h": 89, "custom-handle-high-s": 173, "custom-handle-high-v": 99 };
+        let initValue = initMapping[handle.attr("id")];
         $(element).slider({
             min: 0,
             max: 255,
