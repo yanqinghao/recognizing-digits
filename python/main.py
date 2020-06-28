@@ -1,13 +1,13 @@
+# coding=utf-8
 import json
 import imutils
-from imutils.perspective import four_point_transform
+from imutils import contours
 import base64
 import cv2
-from io import BytesIO
-from PIL import Image
 import numpy as np
 import flask
 from flask import request
+from utils import detection, decorator
 
 STATICS = "web"
 app = flask.Flask(__name__, root_path=".", static_folder=STATICS)
@@ -19,74 +19,159 @@ def root():
 
 
 @app.route("/ledDetection", methods=["POST"])
+@decorator.exception_handler
 def led_detection():
     args = json.loads(request.form["data"])
 
-    # missing_padding = len(args["img"]) % 4
-    # if missing_padding != 0:
-    #     args["img"] += '=' * (4 - missing_padding)
-    nparr = np.frombuffer(base64.b64decode(args["img"]), np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_ANYCOLOR)
+    np_arr = np.frombuffer(base64.b64decode(args["img"]), np.uint8)
+    lower_b = np.array(args["lowerb"])
+    upper_b = np.array(args["upperb"])
 
+    img = cv2.imdecode(np_arr, cv2.IMREAD_ANYCOLOR)
+    img = imutils.resize(img, height=800)
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    lower_red = np.array(args["lowerb"])
-    upper_red = np.array(args["upperb"])
 
-    # Here we are defining range of bluecolor in HSV
-    # This creates a mask of white coloured
-    # objects found in the frame.
-    mask = cv2.inRange(hsv, lower_red, upper_red)
+    mask = cv2.inRange(hsv, lower_b, upper_b)
+    blurred = cv2.GaussianBlur(mask, (5, 5), 0)
+    dilate = cv2.dilate(blurred, (3, 3), iterations=1)
+    erode = cv2.erode(dilate, (3, 3), iterations=1)
+    edged = cv2.Canny(erode, 50, 200, 255)
 
-    blurred = cv2.GaussianBlur(mask, (13, 13), 0)
-
-    edged = cv2.Canny(blurred, 100, 200, 255)
-
-    # Dilate it , number of iterations will depend on the image
-    dilate = cv2.dilate(edged, (5, 5), iterations=1)
-    # perform erosion
-    erode = cv2.erode(dilate, (5, 5), iterations=1)
-
-    # find contours in the edge map, then sort them by their
-    # size in descending order
-    cnts = cv2.findContours(edged.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cnts = cv2.findContours(edged.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     cnts = imutils.grab_contours(cnts)
     cnts = sorted(cnts, key=cv2.contourArea, reverse=True)
-    displayCnts = []
-    # loop over the contours
+
+    x_res, y_res, w_res, h_res = 0, 0, 0, 0
     for c in cnts:
-        # approximate the contour
-        if cv2.contourArea(c) > 115:
-            print(cv2.contourArea(c))
-        # peri = cv2.arcLength(c, True)
-        # approx = cv2.approxPolyDP(c, 0.02 * peri, True)
-        # if the contour has four vertices, then we have found
-        # the thermostat display
-        if cv2.contourArea(c) > 115:
-            displayCnts.append(c)
-    for displayCnt in displayCnts:
-        print(cv2.contourArea(displayCnt))
-    # output = four_point_transform(img, displayCnts[0].reshape(4, 2))
-    output = cv2.drawContours(img, displayCnts, -1, (0, 255, 255), 8)
+        (x, y, w, h) = cv2.boundingRect(c)
+        if w * h > w_res * h_res:
+            x_res, y_res, w_res, h_res = x, y, w, h
 
-    # The bitwise and of the frame and mask is done so
-    # that only the blue coloured objects are highlighted
-    # and stored in res
-    # res = cv2.bitwise_and(img, img, mask=mask)
-    # # Blur the image
-    # res = cv2.GaussianBlur(mask, (13, 13), 0)
-    # # Edge detection
-    # edged = cv2.Canny(res, 50, 200, 255)
+    output = cv2.rectangle(img, (x_res, y_res), (x_res + w_res, y_res + h_res), (0, 255, 0), 2)
 
-    retval, buffer = cv2.imencode('.png', mask)
+    crop_img = img[y_res:y_res + h_res, x_res:x_res + w_res]
+    gray = cv2.cvtColor(crop_img, cv2.COLOR_BGR2GRAY)
+    thresh = cv2.threshold(gray, 80, 255, cv2.THRESH_BINARY)[1]
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (6, 6))
+    morph_image = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
+
+    cnts_digital = cv2.findContours(morph_image.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cnts_digital = imutils.grab_contours(cnts_digital)
+    digitCnts = contours.sort_contours(cnts_digital, method="left-to-right")[0]
+
+    x_res, y_res, w_res, h_res = 0, 0, 0, 0
+    for i, c in enumerate(digitCnts):
+        (x, y, w, h) = cv2.boundingRect(c)
+        if w * h > w_res * h_res:
+            x_res, y_res, w_res, h_res = x, y, w, h
+
+    crop_thresh = 255 - thresh[y_res:y_res + h_res, x_res:x_res + w_res]
+    height, width = crop_thresh.shape
+
+    dilate = cv2.dilate(crop_thresh, None, iterations=2)
+    erode = cv2.erode(dilate, None, iterations=2)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (6, 6))
+    morph_image = cv2.morphologyEx(dilate, cv2.MORPH_OPEN, kernel)
+
+    cnts_digital = cv2.findContours(morph_image.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cnts_digital = imutils.grab_contours(cnts_digital)
+    digitCnts = contours.sort_contours(cnts_digital, method="left-to-right")[0]
+
+    digits = []
+    for i, c in enumerate(digitCnts):
+        (x, y, w, h) = cv2.boundingRect(c)
+        roi = crop_thresh[y:y + h, x:x + w]
+        if (h > height * 0.5) & (w < width * 0.3):
+            digit = detection.resolve_digit(roi)
+            if digit is None:
+                digits.append(1)
+            else:
+                digits.append(digit)
+    print(digits)
+
+    retval, buffer = cv2.imencode('.png', output)
     mask_as_text = base64.b64encode(buffer)
 
-    return {"result": "data:image/png;base64," + mask_as_text.decode('utf-8')}
+    return {"result": "data:image/png;base64," + mask_as_text.decode('utf-8'), "success": True}
 
 
 @app.route("/digitRecognize", methods=["POST"])
+@decorator.exception_handler
 def digit_recognize():
-    print(request.form)
-    return request.form
+    args = json.loads(request.form["data"])
+
+    np_arr = np.frombuffer(base64.b64decode(args["img"]), np.uint8)
+    lower_b = np.array(args["lowerb"])
+    upper_b = np.array(args["upperb"])
+
+    img = cv2.imdecode(np_arr, cv2.IMREAD_ANYCOLOR)
+    img = imutils.resize(img, height=800)
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
+    mask = cv2.inRange(hsv, lower_b, upper_b)
+    blurred = cv2.GaussianBlur(mask, (5, 5), 0)
+    dilate = cv2.dilate(blurred, (3, 3), iterations=1)
+    erode = cv2.erode(dilate, (3, 3), iterations=1)
+    edged = cv2.Canny(erode, 50, 200, 255)
+
+    cnts = cv2.findContours(edged.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    cnts = imutils.grab_contours(cnts)
+    cnts = sorted(cnts, key=cv2.contourArea, reverse=True)
+
+    x_res, y_res, w_res, h_res = 0, 0, 0, 0
+    for c in cnts:
+        (x, y, w, h) = cv2.boundingRect(c)
+        if w * h > w_res * h_res:
+            x_res, y_res, w_res, h_res = x, y, w, h
+
+    output = cv2.rectangle(img, (x_res, y_res), (x_res + w_res, y_res + h_res), (0, 255, 0), 2)
+
+    crop_img = img[y_res:y_res + h_res, x_res:x_res + w_res]
+    gray = cv2.cvtColor(crop_img, cv2.COLOR_BGR2GRAY)
+    thresh = cv2.threshold(gray, 80, 255, cv2.THRESH_BINARY)[1]
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (6, 6))
+    morph_image = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
+
+    cnts_digital = cv2.findContours(morph_image.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cnts_digital = imutils.grab_contours(cnts_digital)
+    digitCnts = contours.sort_contours(cnts_digital, method="left-to-right")[0]
+
+    x_res, y_res, w_res, h_res = 0, 0, 0, 0
+    for i, c in enumerate(digitCnts):
+        (x, y, w, h) = cv2.boundingRect(c)
+        if w * h > w_res * h_res:
+            x_res, y_res, w_res, h_res = x, y, w, h
+
+    crop_thresh = 255 - thresh[y_res:y_res + h_res, x_res:x_res + w_res]
+    height, width = crop_thresh.shape
+
+    dilate = cv2.dilate(crop_thresh, None, iterations=2)
+    erode = cv2.erode(dilate, None, iterations=2)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (6, 6))
+    morph_image = cv2.morphologyEx(dilate, cv2.MORPH_OPEN, kernel)
+
+    cnts_digital = cv2.findContours(morph_image.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cnts_digital = imutils.grab_contours(cnts_digital)
+    digitCnts = contours.sort_contours(cnts_digital, method="left-to-right")[0]
+
+    digits = []
+    for i, c in enumerate(digitCnts):
+        (x, y, w, h) = cv2.boundingRect(c)
+        roi = crop_thresh[y:y + h, x:x + w]
+        if (h > height * 0.5) & (w < width * 0.3):
+            digit = detection.resolve_digit(roi)
+            if digit is None:
+                digits.append(1)
+            else:
+                digits.append(digit)
+    print(digits)
+
+    retval, buffer = cv2.imencode('.png', output)
+    mask_as_text = base64.b64encode(buffer)
+
+    return {"result": "data:image/png;base64," + mask_as_text.decode('utf-8'), "success": True}
 
 
 if __name__ == '__main__':
