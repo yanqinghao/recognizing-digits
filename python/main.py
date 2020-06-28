@@ -18,8 +18,8 @@ def root():
     return app.send_static_file('index.html')
 
 
-@app.route("/ledDetection", methods=["POST"])
 @decorator.exception_handler
+@app.route("/ledDetection", methods=["POST"])
 def led_detection():
     args = json.loads(request.form["data"])
 
@@ -49,55 +49,14 @@ def led_detection():
 
     output = cv2.rectangle(img, (x_res, y_res), (x_res + w_res, y_res + h_res), (0, 255, 0), 2)
 
-    crop_img = img[y_res:y_res + h_res, x_res:x_res + w_res]
-    gray = cv2.cvtColor(crop_img, cv2.COLOR_BGR2GRAY)
-    thresh = cv2.threshold(gray, 80, 255, cv2.THRESH_BINARY)[1]
-
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (6, 6))
-    morph_image = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
-
-    cnts_digital = cv2.findContours(morph_image.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    cnts_digital = imutils.grab_contours(cnts_digital)
-    digitCnts = contours.sort_contours(cnts_digital, method="left-to-right")[0]
-
-    x_res, y_res, w_res, h_res = 0, 0, 0, 0
-    for i, c in enumerate(digitCnts):
-        (x, y, w, h) = cv2.boundingRect(c)
-        if w * h > w_res * h_res:
-            x_res, y_res, w_res, h_res = x, y, w, h
-
-    crop_thresh = 255 - thresh[y_res:y_res + h_res, x_res:x_res + w_res]
-    height, width = crop_thresh.shape
-
-    dilate = cv2.dilate(crop_thresh, None, iterations=2)
-    erode = cv2.erode(dilate, None, iterations=2)
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (6, 6))
-    morph_image = cv2.morphologyEx(dilate, cv2.MORPH_OPEN, kernel)
-
-    cnts_digital = cv2.findContours(morph_image.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    cnts_digital = imutils.grab_contours(cnts_digital)
-    digitCnts = contours.sort_contours(cnts_digital, method="left-to-right")[0]
-
-    digits = []
-    for i, c in enumerate(digitCnts):
-        (x, y, w, h) = cv2.boundingRect(c)
-        roi = crop_thresh[y:y + h, x:x + w]
-        if (h > height * 0.5) & (w < width * 0.3):
-            digit = detection.resolve_digit(roi)
-            if digit is None:
-                digits.append(1)
-            else:
-                digits.append(digit)
-    print(digits)
-
     retval, buffer = cv2.imencode('.png', output)
     mask_as_text = base64.b64encode(buffer)
 
     return {"result": "data:image/png;base64," + mask_as_text.decode('utf-8'), "success": True}
 
 
-@app.route("/digitRecognize", methods=["POST"])
 @decorator.exception_handler
+@app.route("/digitRecognize", methods=["POST"])
 def digit_recognize():
     args = json.loads(request.form["data"])
 
@@ -119,15 +78,13 @@ def digit_recognize():
     cnts = imutils.grab_contours(cnts)
     cnts = sorted(cnts, key=cv2.contourArea, reverse=True)
 
-    x_res, y_res, w_res, h_res = 0, 0, 0, 0
+    x_led, y_led, w_led, h_led = 0, 0, 0, 0
     for c in cnts:
         (x, y, w, h) = cv2.boundingRect(c)
-        if w * h > w_res * h_res:
-            x_res, y_res, w_res, h_res = x, y, w, h
+        if w * h > w_led * h_led:
+            x_led, y_led, w_led, h_led = x, y, w, h
 
-    output = cv2.rectangle(img, (x_res, y_res), (x_res + w_res, y_res + h_res), (0, 255, 0), 2)
-
-    crop_img = img[y_res:y_res + h_res, x_res:x_res + w_res]
+    crop_img = img[y_led:y_led + h_led, x_led:x_led + w_led]
     gray = cv2.cvtColor(crop_img, cv2.COLOR_BGR2GRAY)
     thresh = cv2.threshold(gray, 80, 255, cv2.THRESH_BINARY)[1]
 
@@ -157,21 +114,30 @@ def digit_recognize():
     digitCnts = contours.sort_contours(cnts_digital, method="left-to-right")[0]
 
     digits = []
+    output = img
     for i, c in enumerate(digitCnts):
         (x, y, w, h) = cv2.boundingRect(c)
         roi = crop_thresh[y:y + h, x:x + w]
         if (h > height * 0.5) & (w < width * 0.3):
+            output = cv2.rectangle(img, (x_led + x_res + x, y_led + y_res + y),
+                                   (x_led + x_res + x + w, y_led + y_res + y + h), (0, 255, 0), 2)
             digit = detection.resolve_digit(roi)
             if digit is None:
-                digits.append(1)
+                digits.append("1")
             else:
-                digits.append(digit)
-    print(digits)
+                digits.append(str(digit))
+    digits.insert(2, ".")
 
     retval, buffer = cv2.imencode('.png', output)
     mask_as_text = base64.b64encode(buffer)
 
-    return {"result": "data:image/png;base64," + mask_as_text.decode('utf-8'), "success": True}
+    return {
+        "result": {
+            "image": "data:image/png;base64," + mask_as_text.decode('utf-8'),
+            "digits": "".join(digits)
+        },
+        "success": True
+    }
 
 
 if __name__ == '__main__':
