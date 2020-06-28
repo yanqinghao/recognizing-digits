@@ -3,6 +3,12 @@ import "./node_modules/jquery-ui-dist/jquery-ui.js"
 
 $(document).ready(function () {
     var sliders = $(".slider-handle");
+    toDataURL(
+        "web/statics/img/test.jpg",
+        function (dataUrl) {
+            $("#showimg").attr('src', dataUrl).css("height", 800);
+        }
+    )
     sliders.each(function (index, element) {
         let handle = $(element.getElementsByClassName("ui-slider-handle"));
         let initMapping = { "custom-handle-low-h": 34, "custom-handle-low-s": 0, "custom-handle-low-v": 24, "custom-handle-high-h": 89, "custom-handle-high-s": 173, "custom-handle-high-v": 99 };
@@ -55,6 +61,18 @@ $(document).ready(function () {
             alert("PLS UPLOAD SOME IMAGE");
         }
     });
+    $("#submitBtn").click(function () {
+        let inputData = getPostData();
+        console.log(inputData);
+        if (inputData.success) {
+            $.post("/digitRecognize", { data: JSON.stringify(inputData.data) }, function (res, status) {
+                $('#processedimg').attr('src', res.result.image).css("height", 800);
+                $('#result-value').text(res.result.digits);
+            }, "json");
+        } else {
+            alert("PLS UPLOAD SOME IMAGE");
+        }
+    });
 });
 
 function getPostData() {
@@ -73,3 +91,24 @@ function getPostData() {
     }
 
 }
+
+function toDataURL(src, callback, outputFormat) {
+    var img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = function () {
+        var canvas = document.createElement('CANVAS');
+        var ctx = canvas.getContext('2d');
+        var dataURL;
+        canvas.height = this.naturalHeight;
+        canvas.width = this.naturalWidth;
+        ctx.drawImage(this, 0, 0);
+        dataURL = canvas.toDataURL(outputFormat);
+        callback(dataURL);
+    };
+    img.src = src;
+    if (img.complete || img.complete === undefined) {
+        img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+        img.src = src;
+    }
+}
+
